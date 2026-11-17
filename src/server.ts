@@ -1,47 +1,192 @@
+import e from "express";
 import express, {
   type Application,
   type Request,
   type Response,
 } from "express";
 import { Pool } from "pg";
+import config from "./config";
 
 const app: Application = express();
-const port = 5000;
 
 const pool = new Pool({
-    connectionString: "postgresql://neondb_owner:npg_UxCBc5bLGg3A@ep-dry-recipe-az991atz.c-3.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
-})
+  connectionString: config.connection_string,
+});
 
-// console.log(pool)
+const initDB = async () => {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS users(
+      id SERIAL PRIMARY KEY,
+      name VARCHAR(255),
+      email VARCHAR(255) UNIQUE NOT NULL,
+      password VARCHAR(255) NOT NULL,
+      age INT,
+      is_active BOOLEAN DEFAULT true,
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    console.log("Database connected!");
+  } catch (error) {
+    console.log(error);
+  }
+};
 
 app.use(express.json());
 // app.use(express.text());
-app.use(express.urlencoded({extended: true}));
-
+app.use(express.urlencoded({ extended: true }));
+initDB();
 
 app.get("/", (req: Request, res: Response) => {
   // res.send("This is route route");
   res.status(200).json({
     success: true,
-    message: "This is express server.",
-    author: "Nabil",
+    message: "Express server is runnig!",
+    author: "Shariea Reza Nabil",
   });
 });
 
-app.post("/", (req: Request, res: Response) => {
-    const body = req.body;
+app.post("/api/v1/users", async (req: Request, res: Response) => {
+  try {
+    const { name, email, password, age } = req.body;
+
+    const result = await pool.query(
+      `
+      INSERT INTO users (name, email, password, age) VALUES ($1, $2, $3, $4) RETURNING *`,
+      [name, email, password, age],
+    );
 
     res.status(201).json({
-    success: true,
-    message: "New data created",
-    author: "Nabil",
-    data: body
-  });
+      success: true,
+      message: "New user created",
+      data: result.rows[0],
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+      error: error,
+    });
+  }
+});
 
-})
+app.get("/api/v1/users", async (req: Request, res: Response) => {
+  try {
+    const result = await pool.query(`
+      SELECT * FROM users
+      `);
 
+    console.log(result.rows);
 
+    res.status(200).json({
+      success: true,
+      message: "All Users",
+      data: result.rows,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+      error: error,
+    });
+  }
+});
 
-app.listen(port, () => {
-  console.log(`The express server is rumming on the port ${port}`);
+app.get("/api/v1/users/:id", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      `
+      SELECT * FROM users WHERE id=$1
+      `,
+      [id],
+    );
+
+    console.log(result.rows);
+
+    res.status(200).json({
+      success: true,
+      message: "Get single User",
+      data: result.rows[0],
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+      error: error,
+    });
+  }
+});
+
+app.put("/api/v1/users/:id", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { name, password, age, is_active } = req.body;
+
+    const result = await pool.query(
+      `
+          UPDATE users
+          SET
+          name = COALESCE($1, name),
+          password = COALESCE($2, password),
+          age = COALESCE($3, age),
+          is_active = COALESCE($4, is_active)
+          WHERE id=$5 RETURNING *
+          `,
+      [name ?? null, password ?? null, age ?? null, is_active ?? null, id],
+    );
+
+    console.log(result.rows);
+
+    res.status(200).json({
+      success: true,
+      message: "User updated successfully",
+      data: result.rows[0],
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+      error: error,
+    });
+  }
+});
+
+app.delete("/api/v1/users/:id", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      `
+      DELETE FROM users WHERE id=$1
+      `,
+      [id],
+    );
+
+    console.log(result);
+
+    if (result.rowCount === 0) {
+      res.status(404).json({
+        success: false,
+        message: "User not found!",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "User Deleted successfully",
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+      error: error,
+    });
+  }
+});
+
+app.listen(config.port, () => {
+  console.log(`The express server is rumming on the port ${config.port}`);
 });

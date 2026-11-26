@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs";
 import { pool } from "../../db";
 import jwt from "jsonwebtoken";
 import type { IUser } from "../users/user.interface";
+import config from "../../config";
 
 const autherviceIntoDB = async (payload: IUser) => {
   const { name, email, password } = payload;
@@ -32,7 +33,7 @@ const autherviceIntoDB = async (payload: IUser) => {
 //     email: user.rows[0].email,
 //   };
 
-  const accessToken = jwt.sign(user.rows[0], "vchgvcvyevcegvcc", {
+  const accessToken = jwt.sign(user.rows[0], config.jwt_secret, {
     expiresIn: "1d",
   });
 
